@@ -1,0 +1,8 @@
+lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+# This lockfile is intentionally minimal.
+# Run `pnpm install` to generate the full lockfile.

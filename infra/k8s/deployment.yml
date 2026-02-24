@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: launchterminal
+  namespace: launchterminal
+  labels:
+    app: launchterminal
+    version: "2.4.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: launchterminal
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: launchterminal
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: launchterminal
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: launchterminal
+          image: ghcr.io/launchterminal/launchterminal:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+            - name: websocket
+              containerPort: 3001
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: launchterminal-secrets
+            - configMapRef:
+                name: launchterminal-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /app/claw.config.yml
+              subPath: claw.config.yml
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: launchterminal-bot-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: launchterminal
+  namespace: launchterminal
+  labels:
+    app: launchterminal
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: websocket
+      port: 3001
+      targetPort: websocket
+      protocol: TCP
+  selector:
+    app: launchterminal
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: launchterminal
+  namespace: launchterminal
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: launchterminal
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

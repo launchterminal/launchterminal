@@ -1,0 +1,168 @@
+# LaunchTerminal Configuration
+# Docs: https://launchterminal.dev/docs/configuration
+
+bot:
+  name: "MyClaw"
+  version: "1.0.0"
+  personality: "friendly"
+  language: "en"
+  description: "An OpenClaw-powered AI assistant"
+
+engine:
+  provider: "openclaw"
+  model: "claw-v2-turbo"
+  max_tokens: 4096
+  temperature: 0.7
+  top_p: 0.95
+  streaming: true
+  timeout_ms: 30000
+  retry:
+    max_attempts: 3
+    backoff_ms: 1000
+    backoff_multiplier: 2
+
+platforms:
+  discord:
+    enabled: true
+    prefix: "!"
+    slash_commands: true
+    guilds: ["*"]
+    intents:
+      - GUILDS
+      - GUILD_MESSAGES
+      - GUILD_MESSAGE_REACTIONS
+      - DIRECT_MESSAGES
+    presence:
+      status: "online"
+      activity:
+        type: "WATCHING"
+        name: "for commands"
+
+  slack:
+    enabled: false
+    signing_secret: "${SLACK_SIGNING_SECRET}"
+    socket_mode: true
+    app_token: "${SLACK_APP_TOKEN}"
+
+  telegram:
+    enabled: false
+    webhook_url: "${TELEGRAM_WEBHOOK_URL}"
+    allowed_updates:
+      - message
+      - callback_query
+      - inline_query
+
+  web:
+    enabled: true
+    port: 3000
+    cors:
+      origins: ["*"]
+      credentials: true
+    rate_limit:
+      max: 100
+      window_ms: 60000
+
+plugins:
+  - name: "sentiment"
+    enabled: true
+    config:
+      provider: "internal"
+      threshold: 0.3
+      languages: ["en", "es", "fr", "de", "ja"]
+
+  - name: "rate-limiter"
+    enabled: true
+    config:
+      strategy: "sliding-window"
+      max_requests: 60
+      window_ms: 60000
+      key_prefix: "rl:"
+
+  - name: "analytics"
+    enabled: true
+    config:
+      provider: "posthog"
+      flush_interval_ms: 10000
+      batch_size: 100
+
+  - name: "i18n"
+    enabled: false
+    config:
+      default_locale: "en"
+      fallback_locale: "en"
+      detect_language: true
+
+  - name: "memory"
+    enabled: true
+    config:
+      provider: "redis"
+      ttl_seconds: 3600
+      max_history: 50
+
+pipeline:
+  middleware:
+    - "auth"
+    - "rate-limiter"
+    - "i18n"
+    - "sentiment"
+    - "memory"
+    - "analytics"
+
+transport:
+  websocket:
+    enabled: true
+    port: 3001
+    path: "/ws"
+    heartbeat_interval_ms: 30000
+    max_payload_bytes: 1048576
+    compression: true
+
+  grpc:
+    enabled: false
+    port: 50051
+    reflection: true
+
+observability:
+  logging:
+    level: "info"
+    format: "json"
+    redact:
+      - "*.password"
+      - "*.token"
+      - "*.apiKey"
+
+  metrics:
+    enabled: true
+    path: "/metrics"
+    default_labels:
+      service: "launchterminal"
+      version: "2.4.0"
+
+  tracing:
+    enabled: true
+    exporter: "otlp"
+    endpoint: "http://localhost:4318"
+    sample_rate: 0.1
+
+  health:
+    enabled: true
+    path: "/health"
+    readiness_path: "/ready"
+
+database:
+  provider: "postgres"
+  url: "${DATABASE_URL}"
+  pool:
+    min: 5
+    max: 20
+    idle_timeout_ms: 10000
+  ssl: true
+  migrations:
+    auto_run: true
+    directory: "src/db/migrations"
+
+cache:
+  provider: "redis"
+  url: "${REDIS_URL}"
+  prefix: "lt:"
+  default_ttl_seconds: 300
